@@ -1,15 +1,21 @@
+import { useEffect, useState } from 'react'
 import { AlertTriangle, MapPin } from 'lucide-react'
 import Badge from '../components/Badge'
 import ProgressBar from '../components/ProgressBar'
 import StatCard from '../components/StatCard'
-import { buildingAlerts, buildingMetrics, zones } from '../data/mockData'
+
+import { buildingData } from '../data/mockData'
 
 function BuildingPage() {
+  const data = buildingData
+
+  const { metrics, alerts, zones } = data
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold">Building & Facility Management</h2>
+          <h2 className="text-2xl font-semibold">Building &amp; Facility Management</h2>
           <p className="text-sm text-muted">Monitor and manage warehouse infrastructure and systems</p>
         </div>
         <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primaryDark">
@@ -18,19 +24,16 @@ function BuildingPage() {
       </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard {...buildingMetrics[0]} />
-        <StatCard
-          {...buildingMetrics[1]}
-          rightContent={<span className="text-sm font-semibold text-slate-700">{buildingMetrics[1].value}</span>}
-        />
-        <StatCard {...buildingMetrics[2]} rightContent={<Badge tone="success">Excellent</Badge>} />
-        <StatCard {...buildingMetrics[3]} rightContent={<Badge tone="success">Secure</Badge>} />
+        <StatCard {...metrics[0]} />
+        <StatCard {...metrics[1]} rightContent={<span className="text-sm font-semibold text-slate-700">{metrics[1].value}</span>} />
+        <StatCard {...metrics[2]} rightContent={<Badge tone="success">Excellent</Badge>} />
+        <StatCard {...metrics[3]} rightContent={<Badge tone="success">Secure</Badge>} />
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-surface p-4 shadow-card">
         <h3 className="mb-3 text-lg font-semibold">System Alerts</h3>
         <div className="space-y-2">
-          {buildingAlerts.map((alert) => (
+          {alerts.map((alert) => (
             <div key={alert} className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
               <AlertTriangle size={16} className="mt-0.5" />
               <span>{alert}</span>

@@ -1,9 +1,10 @@
-import { NavLink } from 'react-router-dom'
+import { useNavigate, NavLink } from 'react-router-dom'
 import {
   Building2,
   ClipboardList,
   FileBarChart2,
   LayoutDashboard,
+  LogOut,
   Package,
   Settings,
   ShieldCheck,
@@ -14,23 +15,25 @@ const navSections = [
   {
     label: 'Main',
     items: [
-      { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-      { to: '/inventory', icon: Package, label: 'Inventory', badge: 3 },
-      { to: '/operations', icon: ClipboardList, label: 'Operations', badge: 1 },
-      { to: '/building', icon: Building2, label: 'Building Management', badge: 2 },
+      { to: '/',           icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/inventory',  icon: Package,         label: 'Inventory',          badge: 3 },
+      { to: '/operations', icon: ClipboardList,   label: 'Operations',         badge: 1 },
+      { to: '/building',   icon: Building2,       label: 'Building Management', badge: 2 },
     ],
   },
   {
     label: 'Management',
     items: [
-      { to: '/reports', icon: FileBarChart2, label: 'Reports' },
-      { to: '/compliance', icon: ShieldCheck, label: 'Compliance' },
-      { to: '/settings', icon: Settings, label: 'Settings' },
+      { to: '/reports',    icon: FileBarChart2, label: 'Reports' },
+      { to: '/compliance', icon: ShieldCheck,   label: 'Compliance' },
+      { to: '/settings',   icon: Settings,      label: 'Settings' },
     ],
   },
 ]
 
 function Sidebar() {
+  const user = { name: 'Admin', role: 'Warehouse Manager' }
+
   return (
     <aside className="sticky top-0 flex h-screen w-64 flex-col border-r border-slate-200 bg-surface p-5">
       <div className="mb-8">
@@ -51,6 +54,7 @@ function Sidebar() {
                   <NavLink
                     key={`${section.label}-${item.label}`}
                     to={item.to}
+                    end={item.to === '/'}
                     className={({ isActive }) =>
                       `flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition ${
                         isActive
@@ -76,6 +80,7 @@ function Sidebar() {
         ))}
       </nav>
 
+      {/* User profile */}
       <NavLink
         to="/profile"
         className={({ isActive }) =>
@@ -86,12 +91,17 @@ function Sidebar() {
           }`
         }
       >
-        <UserCircle2 className="text-slate-600" size={18} />
-        <span>
-          <span className="block text-sm font-medium text-slate-800">John Doe</span>
-          <span className="block text-xs text-slate-500">Warehouse Manager</span>
+        <UserCircle2 className="text-slate-600 shrink-0" size={18} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium text-slate-800">
+            {user?.name || 'User'}
+          </span>
+          <span className="block text-xs text-slate-500 capitalize">
+            {user?.role || 'staff'}
+          </span>
         </span>
       </NavLink>
+
     </aside>
   )
 }

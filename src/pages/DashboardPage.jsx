@@ -1,9 +1,15 @@
+import { useEffect, useState } from 'react'
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import Badge from '../components/Badge'
 import StatCard from '../components/StatCard'
-import { complianceData, dashboardStats, monthlyOperations, temperatureZones } from '../data/mockData'
+
+import { dashboardData } from '../data/mockData'
 
 function DashboardPage() {
+  const data = dashboardData
+
+  const { dashboardStats, monthlyOperations, complianceData, temperatureZones } = data
+
   return (
     <div className="space-y-6">
       <header>
@@ -47,13 +53,7 @@ function DashboardPage() {
           <div className="mx-auto h-56">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={complianceData}
-                  innerRadius={52}
-                  outerRadius={78}
-                  dataKey="value"
-                  stroke="none"
-                >
+                <Pie data={complianceData} innerRadius={52} outerRadius={78} dataKey="value" stroke="none">
                   {complianceData.map((entry) => (
                     <Cell key={entry.name} fill={entry.color} />
                   ))}
