@@ -2,13 +2,83 @@ import { useEffect, useState } from 'react'
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import Badge from '../components/Badge'
 import StatCard from '../components/StatCard'
-
-import { dashboardData } from '../data/mockData'
+import { supabase } from '../lib/supabaseClient'
 
 function DashboardPage() {
-  const data = dashboardData
+  const [stats, setStats] = useState([])
+  const [zones, setZones] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const { dashboardStats, monthlyOperations, complianceData, temperatureZones } = data
+  useEffect(() => {
+    fetchDashboardData()
+  }, [])
+
+  async function fetchDashboardData() {
+    try {
+      setLoading(true)
+      
+      // Fetch Inventory stats
+      const { data: inventoryData, error: inventoryError } = await supabase
+        .from('inventory_items')
+        .select('status')
+      
+      if (inventoryError) throw inventoryError
+
+      // Fetch Warehouse Zones
+      const { data: zoneData, error: zoneError } = await supabase
+        .from('warehouse_zones')
+        .select('*')
+      
+      if (zoneError) throw zoneError
+
+      // Process Stats
+      const totalInventory = inventoryData.length
+      const lowStock = inventoryData.filter(i => i.status === 'Low Stock').length
+      const expired = inventoryData.filter(i => i.status === 'Expired').length
+      
+      setStats([
+        { title: 'Total Inventory', value: totalInventory.toLocaleString(), subtitle: 'Active drug items' },
+        { title: 'Storage Capacity', value: '78%', subtitle: 'Capacity used' },
+        { title: 'Active Alerts', value: (lowStock + expired).toString(), subtitle: `${lowStock} low stock, ${expired} expired` },
+        { title: 'Compliance Score', value: '92%', subtitle: 'Excellent' },
+      ])
+
+      setZones(zoneData.map(z => ({
+        zone: z.name,
+        temp: z.temperature,
+        status: z.status
+      })))
+
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fallback / Hardcoded data for charts (to be connected later if needed)
+  const monthlyOperations = [
+    { month: 'Jan', movements: 1200 },
+    { month: 'Feb', movements: 1450 },
+    { month: 'Mar', movements: 1100 },
+    { month: 'Apr', movements: 1600 },
+    { month: 'May', movements: 1300 },
+    { month: 'Jun', movements: 1500 },
+  ]
+
+  const complianceData = [
+    { name: 'Compliant', value: 92, color: '#00BFA6' },
+    { name: 'Minor Issues', value: 6, color: '#F59E0B' },
+    { name: 'Critical', value: 2, color: '#DC2626' },
+  ]
+
+  if (loading) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <div className="text-slate-500">Loading dashboard data...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -18,13 +88,13 @@ function DashboardPage() {
       </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard {...dashboardStats[0]} />
+        <StatCard {...stats[0]} />
         <StatCard
-          {...dashboardStats[1]}
+          {...stats[1]}
           rightContent={<span className="text-sm font-semibold text-slate-600">78%</span>}
         />
-        <StatCard {...dashboardStats[2]} />
-        <StatCard {...dashboardStats[3]} rightContent={<Badge tone="success">Excellent</Badge>} />
+        <StatCard {...stats[2]} />
+        <StatCard {...stats[3]} rightContent={<Badge tone="success">Excellent</Badge>} />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
@@ -82,7 +152,7 @@ function DashboardPage() {
           <p className="text-sm text-muted">Real-time temperature across storage zones</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {temperatureZones.map((zone) => (
+          {zones.map((zone) => (
             <div key={zone.zone} className="rounded-xl border border-slate-200 p-4">
               <p className="text-sm text-muted">{zone.zone}</p>
               <p className="mt-1 text-xl font-semibold">{zone.temp}</p>
@@ -98,3 +168,4 @@ function DashboardPage() {
 }
 
 export default DashboardPage
+

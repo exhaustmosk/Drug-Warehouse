@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useNavigate, NavLink } from 'react-router-dom'
 import {
   Building2,
@@ -10,29 +11,42 @@ import {
   ShieldCheck,
   UserCircle2,
 } from 'lucide-react'
-
-const navSections = [
-  {
-    label: 'Main',
-    items: [
-      { to: '/',           icon: LayoutDashboard, label: 'Dashboard' },
-      { to: '/inventory',  icon: Package,         label: 'Inventory',          badge: 3 },
-      { to: '/operations', icon: ClipboardList,   label: 'Operations',         badge: 1 },
-      { to: '/building',   icon: Building2,       label: 'Building Management', badge: 2 },
-    ],
-  },
-  {
-    label: 'Management',
-    items: [
-      { to: '/reports',    icon: FileBarChart2, label: 'Reports' },
-      { to: '/compliance', icon: ShieldCheck,   label: 'Compliance' },
-      { to: '/settings',   icon: Settings,      label: 'Settings' },
-    ],
-  },
-]
+import { supabase } from '../lib/supabaseClient'
 
 function Sidebar() {
-  const user = { name: 'Admin', role: 'Warehouse Manager' }
+  const [userEmail, setUserEmail] = useState('Admin')
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserEmail(user.email)
+    })
+  }, [])
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    navigate('/login')
+  }
+
+  const navSections = [
+    {
+      label: 'Main',
+      items: [
+        { to: '/',           icon: LayoutDashboard, label: 'Dashboard' },
+        { to: '/inventory',  icon: Package,         label: 'Inventory',          badge: 3 },
+        { to: '/operations', icon: ClipboardList,   label: 'Operations',         badge: 1 },
+        { to: '/building',   icon: Building2,       label: 'Building Management', badge: 2 },
+      ],
+    },
+    {
+      label: 'Management',
+      items: [
+        { to: '/reports',    icon: FileBarChart2, label: 'Reports' },
+        { to: '/compliance', icon: ShieldCheck,   label: 'Compliance' },
+        { to: '/settings',   icon: Settings,      label: 'Settings' },
+      ],
+    },
+  ]
 
   return (
     <aside className="sticky top-0 flex h-screen w-64 flex-col border-r border-slate-200 bg-surface p-5">
@@ -67,11 +81,11 @@ function Sidebar() {
                       <Icon size={16} />
                       {item.label}
                     </span>
-                    {item.badge ? (
-                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-xs text-white">
+                    {item.badge && (
+                      <span className="rounded-full bg-primaryLight px-1.5 py-0.5 text-[10px] font-bold text-primary ring-1 ring-inset ring-primary/20">
                         {item.badge}
                       </span>
-                    ) : null}
+                    )}
                   </NavLink>
                 )
               })}
@@ -80,28 +94,36 @@ function Sidebar() {
         ))}
       </nav>
 
-      {/* User profile */}
-      <NavLink
-        to="/profile"
-        className={({ isActive }) =>
-          `mt-auto flex items-center gap-2 rounded-lg border px-3 py-2 text-left ${
-            isActive
-              ? 'border-primary bg-primary/10'
-              : 'border-slate-200 hover:bg-slate-50'
-          }`
-        }
-      >
-        <UserCircle2 className="text-slate-600 shrink-0" size={18} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-slate-800">
-            {user?.name || 'User'}
+      <div className="mt-auto space-y-2">
+        <NavLink
+          to="/profile"
+          className={({ isActive }) =>
+            `flex items-center gap-2 rounded-lg border px-3 py-2 text-left ${
+              isActive
+                ? 'border-primary bg-primary/10'
+                : 'border-slate-200 hover:bg-slate-50'
+            }`
+          }
+        >
+          <UserCircle2 className="text-slate-600 shrink-0" size={18} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-slate-800">
+              {userEmail.split('@')[0]}
+            </span>
+            <span className="block text-[10px] text-slate-500 truncate">
+              {userEmail}
+            </span>
           </span>
-          <span className="block text-xs text-slate-500 capitalize">
-            {user?.role || 'staff'}
-          </span>
-        </span>
-      </NavLink>
+        </NavLink>
 
+        <button
+          onClick={handleLogout}
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition"
+        >
+          <LogOut size={16} />
+          Logout
+        </button>
+      </div>
     </aside>
   )
 }
