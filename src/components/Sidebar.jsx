@@ -10,11 +10,16 @@ import {
   Settings,
   ShieldCheck,
   UserCircle2,
+  Users,
 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { useProfile } from '../context/ProfileContext'
 
 function Sidebar() {
+  const profile = useProfile()
+  const isAdmin = profile?.role === 'admin'
   const [userEmail, setUserEmail] = useState('Admin')
+  const [orgLabel, setOrgLabel] = useState(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -23,9 +28,29 @@ function Sidebar() {
     })
   }, [])
 
+  useEffect(() => {
+    const id = profile?.organization_id
+    if (!id) {
+      queueMicrotask(() => setOrgLabel(null))
+      return
+    }
+    let cancelled = false
+    supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', id)
+      .single()
+      .then(({ data }) => {
+        if (!cancelled && data?.name) setOrgLabel(data.name)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [profile?.organization_id])
+
   async function handleLogout() {
     await supabase.auth.signOut()
-    navigate('/login')
+    navigate('/')
   }
 
   const navSections = [
@@ -41,6 +66,9 @@ function Sidebar() {
     {
       label: 'Management',
       items: [
+        ...(isAdmin
+          ? [{ to: '/employees', icon: Users, label: 'Employees' }]
+          : []),
         { to: '/reports',    icon: FileBarChart2, label: 'Reports' },
         { to: '/compliance', icon: ShieldCheck,   label: 'Compliance' },
         { to: '/settings',   icon: Settings,      label: 'Settings' },
@@ -52,7 +80,12 @@ function Sidebar() {
     <aside className="sticky top-0 flex h-screen w-64 flex-col border-r border-slate-200 bg-surface p-5">
       <div className="mb-8">
         <h1 className="text-xl font-bold text-primary">DrugWare</h1>
-        <p className="text-xs text-muted">Warehouse Management</p>
+        <p className="text-xs text-muted">
+          <span className="block">Warehouse management</span>
+          {orgLabel && (
+            <span className="mt-0.5 block truncate font-semibold text-slate-600">{orgLabel}</span>
+          )}
+        </p>
       </div>
 
       <nav className="space-y-6">

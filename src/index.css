@@ -14,3 +14,86 @@ body {
   background-color: #f9fafb;
   color: #0f172a;
 }
+
+@keyframes dw-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(22px, -18px, 0) scale(1.06);
+  }
+}
+
+@keyframes dw-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes dw-shimmer-soft {
+  0% {
+    opacity: 0.45;
+    filter: saturate(1);
+  }
+  50% {
+    opacity: 0.72;
+    filter: saturate(1.08);
+  }
+  100% {
+    opacity: 0.45;
+    filter: saturate(1);
+  }
+}
+
+@keyframes dw-glow-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 191, 166, 0.35);
+  }
+  70% {
+    box-shadow: 0 0 0 16px rgba(0, 191, 166, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 191, 166, 0);
+  }
+}
+
+.dw-motion.animate-dw-float {
+  animation: dw-float 14s ease-in-out infinite;
+}
+
+.dw-motion.animate-dw-float-delay {
+  animation: dw-float 18s ease-in-out infinite reverse;
+}
+
+.dw-motion.dw-fade-up {
+  opacity: 0;
+  animation: dw-fade-up 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.dw-motion.hero-shimmer-blobs > div {
+  animation: dw-shimmer-soft 11s ease-in-out infinite;
+}
+
+.dw-motion.hero-cta-ring {
+  animation: dw-glow-ring 4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dw-motion,
+  .dw-motion.dw-fade-up,
+  .dw-motion.animate-dw-float,
+  .dw-motion.animate-dw-float-delay,
+  .dw-motion.hero-shimmer-blobs > div,
+  .dw-motion.hero-cta-ring {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}

@@ -3,74 +3,125 @@ import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis
 import Badge from '../components/Badge'
 import StatCard from '../components/StatCard'
 import { supabase } from '../lib/supabaseClient'
+import { useOrganizationId } from '../hooks/useOrganizationId'
 
 function DashboardPage() {
+  const organizationId = useOrganizationId()
   const [stats, setStats] = useState([])
   const [zones, setZones] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [monthlyOperations, setMonthlyOperations] = useState([])
+  const [complianceData, setComplianceData] = useState([])
+  const [loading, setLoading] = useState(() => !!organizationId)
 
   useEffect(() => {
-    fetchDashboardData()
-  }, [])
-
-  async function fetchDashboardData() {
-    try {
+    let cancelled = false
+    ;(async () => {
+      if (!organizationId) {
+        queueMicrotask(() => {
+          if (!cancelled) setLoading(false)
+        })
+        return
+      }
       setLoading(true)
-      
-      // Fetch Inventory stats
-      const { data: inventoryData, error: inventoryError } = await supabase
-        .from('inventory_items')
-        .select('status')
-      
-      if (inventoryError) throw inventoryError
 
-      // Fetch Warehouse Zones
-      const { data: zoneData, error: zoneError } = await supabase
-        .from('warehouse_zones')
-        .select('*')
-      
-      if (zoneError) throw zoneError
+      try {
+        const org = organizationId
+        const { data: inventoryData, error: inventoryError } = await supabase
+          .from('inventory_items')
+          .select('status')
+          .eq('organization_id', org)
 
-      // Process Stats
-      const totalInventory = inventoryData.length
-      const lowStock = inventoryData.filter(i => i.status === 'Low Stock').length
-      const expired = inventoryData.filter(i => i.status === 'Expired').length
-      
-      setStats([
-        { title: 'Total Inventory', value: totalInventory.toLocaleString(), subtitle: 'Active drug items' },
-        { title: 'Storage Capacity', value: '78%', subtitle: 'Capacity used' },
-        { title: 'Active Alerts', value: (lowStock + expired).toString(), subtitle: `${lowStock} low stock, ${expired} expired` },
-        { title: 'Compliance Score', value: '92%', subtitle: 'Excellent' },
-      ])
+        if (inventoryError) throw inventoryError
 
-      setZones(zoneData.map(z => ({
-        zone: z.name,
-        temp: z.temperature,
-        status: z.status
-      })))
+        const { data: zoneData, error: zoneError } = await supabase
+          .from('warehouse_zones')
+          .select('*')
+          .eq('organization_id', org)
 
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error.message)
-    } finally {
-      setLoading(false)
+        if (zoneError) throw zoneError
+
+        const { data: operationsData, error: operationsError } = await supabase
+          .from('operations')
+          .select('scheduled_date')
+          .eq('organization_id', org)
+
+        if (operationsError) throw operationsError
+
+        const { data: checksData, error: checksError } = await supabase
+          .from('compliance_checks')
+          .select('severity')
+          .eq('organization_id', org)
+
+        if (checksError) throw checksError
+
+        const totalInventory = inventoryData.length
+        const lowStock = inventoryData.filter((i) => i.status === 'Low Stock').length
+        const expired = inventoryData.filter((i) => i.status === 'Expired').length
+        const capacityValues = zoneData.map((z) => Number(z.capacity)).filter((c) => !Number.isNaN(c))
+        const avgCapacity = capacityValues.length
+          ? Math.round(capacityValues.reduce((acc, n) => acc + n, 0) / capacityValues.length)
+          : 0
+
+        const compliantCount = checksData.filter((c) => c.severity === 'Compliant').length
+        const minorCount = checksData.filter((c) => c.severity === 'Minor Issues').length
+        const criticalCount = checksData.filter((c) => c.severity === 'Critical').length
+        const totalChecks = checksData.length || 1
+        const complianceScore = Math.round((compliantCount / totalChecks) * 100)
+
+        const monthMap = new Map()
+        operationsData.forEach((op) => {
+          if (!op.scheduled_date) return
+          const date = new Date(op.scheduled_date)
+          const key = date.toLocaleString('en-US', { month: 'short' })
+          monthMap.set(key, (monthMap.get(key) || 0) + 1)
+        })
+        const orderedMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        const monthlyData = orderedMonths.map((month) => ({
+          month,
+          movements: monthMap.get(month) || 0,
+        }))
+
+        if (cancelled) return
+
+        setStats([
+          { title: 'Total Inventory', value: totalInventory.toLocaleString(), subtitle: 'Active drug items' },
+          { title: 'Storage Capacity', value: `${avgCapacity}%`, subtitle: 'Average zone utilization' },
+          { title: 'Active Alerts', value: (lowStock + expired).toString(), subtitle: `${lowStock} low stock, ${expired} expired` },
+          { title: 'Compliance Score', value: `${complianceScore}%`, subtitle: 'From compliance checks' },
+        ])
+
+        setZones(
+          zoneData.map((z) => ({
+            zone: z.name,
+            temp: z.temperature,
+            status: z.status,
+          })),
+        )
+        setMonthlyOperations(monthlyData)
+        setComplianceData([
+          { name: 'Compliant', value: Math.round((compliantCount / totalChecks) * 100), color: '#00BFA6' },
+          { name: 'Minor Issues', value: Math.round((minorCount / totalChecks) * 100), color: '#F59E0B' },
+          { name: 'Critical', value: Math.round((criticalCount / totalChecks) * 100), color: '#DC2626' },
+        ])
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error.message)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
     }
+  }, [organizationId])
+
+  if (!organizationId) {
+    return (
+      <div className="p-6 max-w-xl rounded-2xl border border-amber-200 bg-amber-50 text-amber-950 text-sm">
+        Dashboard data is scoped to your organization. Run the multitenant SQL migration and finish onboarding so your
+        profile has an organization.
+      </div>
+    )
   }
-
-  // Fallback / Hardcoded data for charts (to be connected later if needed)
-  const monthlyOperations = [
-    { month: 'Jan', movements: 1200 },
-    { month: 'Feb', movements: 1450 },
-    { month: 'Mar', movements: 1100 },
-    { month: 'Apr', movements: 1600 },
-    { month: 'May', movements: 1300 },
-    { month: 'Jun', movements: 1500 },
-  ]
-
-  const complianceData = [
-    { name: 'Compliant', value: 92, color: '#00BFA6' },
-    { name: 'Minor Issues', value: 6, color: '#F59E0B' },
-    { name: 'Critical', value: 2, color: '#DC2626' },
-  ]
 
   if (loading) {
     return (
@@ -80,6 +131,13 @@ function DashboardPage() {
     )
   }
 
+  const safeStats = [
+    stats[0] || { title: 'Total Inventory', value: '0', subtitle: 'Active drug items' },
+    stats[1] || { title: 'Storage Capacity', value: '0%', subtitle: 'Average zone utilization' },
+    stats[2] || { title: 'Active Alerts', value: '0', subtitle: '0 low stock, 0 expired' },
+    stats[3] || { title: 'Compliance Score', value: '0%', subtitle: 'From compliance checks' },
+  ]
+
   return (
     <div className="space-y-6">
       <header>
@@ -88,13 +146,13 @@ function DashboardPage() {
       </header>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard {...stats[0]} />
+        <StatCard {...safeStats[0]} />
         <StatCard
-          {...stats[1]}
-          rightContent={<span className="text-sm font-semibold text-slate-600">78%</span>}
+          {...safeStats[1]}
+          rightContent={<span className="text-sm font-semibold text-slate-600">{safeStats[1].value}</span>}
         />
-        <StatCard {...stats[2]} />
-        <StatCard {...stats[3]} rightContent={<Badge tone="success">Excellent</Badge>} />
+        <StatCard {...safeStats[2]} />
+        <StatCard {...safeStats[3]} rightContent={<Badge tone="success">Live</Badge>} />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">

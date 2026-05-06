@@ -6,28 +6,31 @@ import StatCard from '../components/StatCard'
 import Modal from '../components/Modal'
 import InventoryForm from '../components/InventoryForm'
 import { supabase } from '../lib/supabaseClient'
+import { useOrganizationId } from '../hooks/useOrganizationId'
 
 function InventoryPage() {
+  const organizationId = useOrganizationId()
   const [search, setSearch]     = useState('')
   const [items, setItems]       = useState([])
-  const [loading, setLoading]   = useState(true)
+  const [loading, setLoading]   = useState(() => !!organizationId)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  useEffect(() => {
-    fetchInventory()
-  }, [])
-
-  async function fetchInventory() {
+  async function refreshInventoryData() {
+    if (!organizationId) {
+      setLoading(false)
+      return
+    }
+    setLoading(true)
     try {
-      setLoading(true)
       const { data, error } = await supabase
         .from('inventory_items')
         .select('*')
+        .eq('organization_id', organizationId)
         .order('drug_name', { ascending: true })
 
       if (error) throw error
 
-      const transformedData = data.map(item => ({
+      const transformedData = (data ?? []).map((item) => ({
         id: item.id,
         drugName: item.drug_name,
         genericName: item.generic_name,
@@ -36,7 +39,7 @@ function InventoryPage() {
         expiryDate: item.expiry_date,
         storage: item.storage_type,
         location: item.location,
-        status: item.status
+        status: item.status,
       }))
 
       setItems(transformedData)
@@ -47,17 +50,30 @@ function InventoryPage() {
     }
   }
 
+  useEffect(() => {
+    queueMicrotask(() => {
+      void refreshInventoryData()
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- organizationId triggers reload; refresh closes over latest handlers
+  }, [organizationId])
+
   async function handleAddItem(formData) {
     try {
-      const { data, error } = await supabase
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
+      const userId = userData?.user?.id
+      if (!userId) throw new Error('Please login again.')
+      if (!organizationId) throw new Error('Missing organization.')
+
+      const { error } = await supabase
         .from('inventory_items')
-        .insert([formData])
+        .insert([{ ...formData, user_id: userId, organization_id: organizationId }])
         .select()
 
       if (error) throw error
 
       // Refresh list and close modal
-      await fetchInventory()
+      await refreshInventoryData()
       setIsModalOpen(false)
       alert('Item added successfully!')
     } catch (error) {
@@ -69,14 +85,20 @@ function InventoryPage() {
     if (!window.confirm('Are you sure you want to delete this item?')) return
 
     try {
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
+      const userId = userData?.user?.id
+      if (!userId) throw new Error('Please login again.')
+
       const { error } = await supabase
         .from('inventory_items')
         .delete()
         .eq('id', id)
+        .eq('organization_id', organizationId)
 
       if (error) throw error
 
-      await fetchInventory()
+      await refreshInventoryData()
       alert('Item deleted successfully!')
     } catch (error) {
       alert('Error deleting item: ' + error.message)
@@ -138,6 +160,14 @@ function InventoryPage() {
     { title: 'Low Stock', value: items.filter(i => i.status === 'Low Stock').length.toString(), subtitle: 'Need restocking' },
     { title: 'Expired', value: items.filter(i => i.status === 'Expired').length.toString(), subtitle: 'Require disposal' },
   ]
+
+  if (!organizationId) {
+    return (
+      <div className="p-6 max-w-xl rounded-2xl border border-amber-200 bg-amber-50 text-amber-950 text-sm">
+        Inventory is grouped by organization. Apply the multitenant migration and onboarding first.
+      </div>
+    )
+  }
 
   if (loading) {
     return (

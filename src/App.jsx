@@ -1,8 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import AppLayout from './layout/AppLayout'
 import AuthPage from './pages/AuthPage'
+import LandingPage from './pages/LandingPage'
 import OnboardingPage from './pages/OnboardingPage'
+import { ProfileContext } from './context/ProfileContext'
 import { supabase } from './lib/supabaseClient'
 
 const DashboardPage  = lazy(() => import('./pages/DashboardPage'))
@@ -13,11 +15,17 @@ const ReportsPage    = lazy(() => import('./pages/ReportsPage'))
 const CompliancePage = lazy(() => import('./pages/CompliancePage'))
 const SettingsPage   = lazy(() => import('./pages/SettingsPage'))
 const ProfilePage    = lazy(() => import('./pages/ProfilePage'))
+const EmployeesPage  = lazy(() => import('./pages/EmployeesPage'))
 
 function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  const fetchProfile = useCallback(async (userId) => {
+    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
+    if (data) setProfile(data)
+  }, [])
 
   useEffect(() => {
     // Check current session and profile
@@ -55,19 +63,7 @@ function App() {
     })
 
     return () => subscription.unsubscribe()
-  }, [])
-
-  async function fetchProfile(userId) {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-
-    if (data) {
-      setProfile(data)
-    }
-  }
+  }, [fetchProfile])
 
   if (loading) {
     return <div className="flex h-screen items-center justify-center text-slate-500">Loading...</div>
@@ -76,8 +72,9 @@ function App() {
   if (!session) {
     return (
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<AuthPage />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     )
   }
@@ -92,25 +89,30 @@ function App() {
     )
   }
 
+  const isAdmin = profile.role === 'admin'
+
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading page...</div>}>
-      <Routes>
-        <Route
-          path="/"
-          element={<AppLayout />}
-        >
-          <Route index element={<DashboardPage />} />
-          <Route path="inventory"  element={<InventoryPage />} />
-          <Route path="operations" element={<OperationsPage />} />
-          <Route path="building"   element={<BuildingPage />} />
-          <Route path="reports"    element={<ReportsPage />} />
-          <Route path="compliance" element={<CompliancePage />} />
-          <Route path="settings"   element={<SettingsPage />} />
-          <Route path="profile"    element={<ProfilePage />} />
-          <Route path="*"          element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-    </Suspense>
+    <ProfileContext.Provider value={profile}>
+      <Suspense fallback={<div className="p-6 text-sm text-slate-600">Loading page...</div>}>
+        <Routes>
+          <Route path="/" element={<AppLayout />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="inventory" element={<InventoryPage />} />
+            <Route path="operations" element={<OperationsPage />} />
+            <Route path="building" element={<BuildingPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="compliance" element={<CompliancePage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route
+              path="employees"
+              element={isAdmin ? <EmployeesPage /> : <Navigate to="/" replace />}
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </Suspense>
+    </ProfileContext.Provider>
   )
 }
 

@@ -6,6 +6,7 @@ import StatCard from '../components/StatCard'
 import Modal from '../components/Modal'
 import OperationForm from '../components/OperationForm'
 import { supabase } from '../lib/supabaseClient'
+import { useOrganizationId } from '../hooks/useOrganizationId'
 
 const tabFilters = ['All Operations', 'Receiving', 'Dispatching', 'Transfers', 'Inspections']
 
@@ -17,33 +18,35 @@ const typeIconMap = {
 }
 
 function OperationsPage() {
+  const organizationId = useOrganizationId()
   const [activeTab, setActiveTab] = useState('All Operations')
   const [operations, setOperations] = useState([])
-  const [loading, setLoading]     = useState(true)
+  const [loading, setLoading]     = useState(() => !!organizationId)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  useEffect(() => {
-    fetchOperations()
-  }, [])
-
-  async function fetchOperations() {
+  async function refreshOperationsData() {
+    if (!organizationId) {
+      setLoading(false)
+      return
+    }
+    setLoading(true)
     try {
-      setLoading(true)
       const { data, error } = await supabase
         .from('operations')
         .select('*')
+        .eq('organization_id', organizationId)
         .order('created_at', { ascending: false })
 
       if (error) throw error
 
-      const transformedData = data.map(op => ({
+      const transformedData = (data ?? []).map((op) => ({
         id: op.id,
         type: op.type,
         description: op.description,
         priority: op.priority,
         status: op.status,
         assignedTo: op.assigned_to,
-        scheduled: op.scheduled_date
+        scheduled: op.scheduled_date,
       }))
 
       setOperations(transformedData)
@@ -54,15 +57,28 @@ function OperationsPage() {
     }
   }
 
+  useEffect(() => {
+    queueMicrotask(() => {
+      void refreshOperationsData()
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- organizationId triggers reload; refresh closes over latest handlers
+  }, [organizationId])
+
   async function handleAddOperation(formData) {
     try {
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
+      const userId = userData?.user?.id
+      if (!userId) throw new Error('Please login again.')
+      if (!organizationId) throw new Error('Missing organization.')
+
       const { error } = await supabase
         .from('operations')
-        .insert([formData])
+        .insert([{ ...formData, user_id: userId, organization_id: organizationId }])
 
       if (error) throw error
 
-      await fetchOperations()
+      await refreshOperationsData()
       setIsModalOpen(false)
       alert('Operation created successfully!')
     } catch (error) {
@@ -74,14 +90,20 @@ function OperationsPage() {
     if (!window.confirm('Are you sure you want to delete this operation?')) return
 
     try {
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
+      const userId = userData?.user?.id
+      if (!userId) throw new Error('Please login again.')
+
       const { error } = await supabase
         .from('operations')
         .delete()
         .eq('id', id)
+        .eq('organization_id', organizationId)
 
       if (error) throw error
 
-      await fetchOperations()
+      await refreshOperationsData()
       alert('Operation deleted successfully!')
     } catch (error) {
       alert('Error deleting operation: ' + error.message)
@@ -162,6 +184,14 @@ function OperationsPage() {
     { title: 'Completed', value: operations.filter(o => o.status === 'Completed').length.toString(), subtitle: 'Finished' },
     { title: 'Delayed', value: operations.filter(o => o.status === 'Delayed').length.toString(), subtitle: 'Need attention' },
   ]
+
+  if (!organizationId) {
+    return (
+      <div className="p-6 max-w-xl rounded-2xl border border-amber-200 bg-amber-50 text-amber-950 text-sm">
+        Operations are scoped per organization after you run multitenant migrations and finish onboarding.
+      </div>
+    )
+  }
 
   if (loading) {
     return (

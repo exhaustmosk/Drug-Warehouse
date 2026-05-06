@@ -3,18 +3,24 @@ import { Mail, Phone, ShieldCheck, UserCircle2, Building2, MapPin, FileText, Rul
 import Badge from '../components/Badge'
 import StatCard from '../components/StatCard'
 import { supabase } from '../lib/supabaseClient'
+import { useOrganizationId } from '../hooks/useOrganizationId'
 
 function ProfilePage() {
+  const organizationId = useOrganizationId()
   const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [userStats, setUserStats] = useState([])
+  const [loading, setLoading] = useState(() => !!organizationId)
 
-  useEffect(() => {
-    fetchProfile()
-  }, [])
-
-  async function fetchProfile() {
+  async function refreshProfile() {
+    if (!organizationId) {
+      setLoading(false)
+      return
+    }
+    setLoading(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
       if (!user) return
 
       const { data, error } = await supabase
@@ -25,6 +31,33 @@ function ProfilePage() {
 
       if (error) throw error
       setProfile({ ...data, email: user.email })
+
+      const { data: operationsData, error: operationsError } = await supabase
+        .from('operations')
+        .select('status, created_at')
+        .eq('organization_id', organizationId)
+        .eq('user_id', user.id)
+
+      if (operationsError) throw operationsError
+
+      const currentMonth = new Date().getMonth()
+      const currentYear = new Date().getFullYear()
+      const openTasks = operationsData.filter((op) => op.status === 'Pending' || op.status === 'In Progress').length
+      const completedThisMonth = operationsData.filter((op) => {
+        if (op.status !== 'Completed' || !op.created_at) return false
+        const date = new Date(op.created_at)
+        return date.getMonth() === currentMonth && date.getFullYear() === currentYear
+      }).length
+
+      setUserStats([
+        { title: 'Open Tasks', value: openTasks.toString(), subtitle: 'Assigned operations' },
+        { title: 'Completed This Month', value: completedThisMonth.toString(), subtitle: 'Workflows finalized' },
+        {
+          title: 'Account access',
+          value: data?.role === 'admin' ? 'Administrator' : 'Team member',
+          subtitle: data?.job_title || 'Operations',
+        },
+      ])
     } catch (error) {
       console.error('Error fetching profile:', error.message)
     } finally {
@@ -32,11 +65,20 @@ function ProfilePage() {
     }
   }
 
-  const userStats = [
-    { title: 'Open Tasks', value: '12', subtitle: 'Assigned operations' },
-    { title: 'Completed This Month', value: '38', subtitle: 'Workflows finalized' },
-    { title: 'Role Access', value: profile?.job_title || 'Manager', subtitle: 'Warehouse Admin Scope' },
-  ]
+  useEffect(() => {
+    queueMicrotask(() => {
+      void refreshProfile()
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- organizationId triggers reload; refresh closes over latest handlers
+  }, [organizationId])
+
+  if (!organizationId) {
+    return (
+      <div className="p-6 max-w-xl rounded-2xl border border-amber-200 bg-amber-50 text-amber-950 text-sm">
+        Your profile summary includes organization-scoped task stats once multitenant setup is complete.
+      </div>
+    )
+  }
 
   if (loading) {
     return <div className="p-6 text-slate-500">Loading profile...</div>
@@ -135,7 +177,11 @@ function ProfilePage() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        {userStats.map((stat) => (
+        {(userStats.length ? userStats : [
+          { title: 'Open Tasks', value: '0', subtitle: 'Assigned operations' },
+          { title: 'Completed This Month', value: '0', subtitle: 'Workflows finalized' },
+          { title: 'Role Access', value: profile?.job_title || 'Manager', subtitle: 'Warehouse Admin Scope' },
+        ]).map((stat) => (
           <StatCard key={stat.title} {...stat} />
         ))}
       </section>
